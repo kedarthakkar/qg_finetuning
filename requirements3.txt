@@ -1,0 +1,4 @@
+datasets
+evaluate
+transformers[torch]
+rouge_score
