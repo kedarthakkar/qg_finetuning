@@ -10,16 +10,15 @@ from typing import Optional
 
 
 class QGFineTune:
-
     # TODO: Type annotation for metric
     def __init__(
         self,
-        base_checkpoint: str = 'facebook/bart-large-cnn',
-        tokenizer = None,
+        base_checkpoint: str = "facebook/bart-large-cnn",
+        tokenizer=None,
         max_input_length: int = 1024,
         max_target_length: int = 128,
-        model_filepath: str = 'fairytale_qg',
-        metric = load_metric('rouge'),
+        model_filepath: str = "fairytale_qg",
+        metric=load_metric("rouge"),
         seed: int = 334,
         train_sample_size: Optional[int] = None,
         val_sample_size: Optional[int] = None,
@@ -42,90 +41,108 @@ class QGFineTune:
 
     # TODO: Add function type annotation
     def load_datasets(self):
-        train_dataset = load_dataset('GEM/FairytaleQA', split='train')
-        val_dataset = load_dataset('GEM/FairytaleQA', split='validation')
-        test_dataset = load_dataset('GEM/FairytaleQA', split='test')
+        train_dataset = load_dataset("GEM/FairytaleQA", split="train")
+        val_dataset = load_dataset("GEM/FairytaleQA", split="validation")
+        test_dataset = load_dataset("GEM/FairytaleQA", split="test")
 
         if self.train_sample_size:
-            train_dataset = train_dataset.shuffle(seed=self.seed).select(range(self.train_sample_size))
+            train_dataset = train_dataset.shuffle(seed=self.seed).select(
+                range(self.train_sample_size)
+            )
 
         if self.val_sample_size:
-            val_dataset = val_dataset.shuffle(seed=self.seed).select(range(self.val_sample_size))
+            val_dataset = val_dataset.shuffle(seed=self.seed).select(
+                range(self.val_sample_size)
+            )
 
         if self.test_sample_size:
-            test_dataset = test_dataset.shuffle(seed=self.seed).select(range(self.test_sample_size))
+            test_dataset = test_dataset.shuffle(seed=self.seed).select(
+                range(self.test_sample_size)
+            )
 
         return train_dataset, val_dataset, test_dataset
 
     def tokenize_datasets(self, train_dataset, val_dataset, test_dataset):
-        tokenized_datasets = [dataset.map(
-            self._tokenize_function,
-            batched=True,
-            remove_columns=[
-                'story_name',
-                'content',
-                'answer',
-                'question',
-                'gem_id',
-                'target',
-                'references',
-                'local_or_sum',
-                'attribute',
-                'ex_or_im'
-            ]
-        ) for dataset in [train_dataset, val_dataset, test_dataset]]
+        tokenized_datasets = [
+            dataset.map(
+                self._tokenize_function,
+                batched=True,
+                remove_columns=[
+                    "story_name",
+                    "content",
+                    "answer",
+                    "question",
+                    "gem_id",
+                    "target",
+                    "references",
+                    "local_or_sum",
+                    "attribute",
+                    "ex_or_im",
+                ],
+            )
+            for dataset in [train_dataset, val_dataset, test_dataset]
+        ]
 
         return tokenized_datasets[0], tokenized_datasets[1], tokenized_datasets[2]
 
     def _tokenize_function(self, examples):
         model_inputs = self.tokenizer(
-            examples['content'],
+            examples["content"],
             max_length=self.max_input_length,
-            padding='max_length',
+            padding="max_length",
             truncation=True,
-            return_tensors='pt'
+            return_tensors="pt",
         )
         with self.tokenizer.as_target_tokenizer():
             targets = self.tokenizer(
-                examples['target'],
+                examples["target"],
                 max_length=self.max_target_length,
-                padding='max_length',
+                padding="max_length",
                 truncation=True,
-                return_tensors='pt'
+                return_tensors="pt",
             )
 
-        model_inputs['labels'] = targets['input_ids']
+        model_inputs["labels"] = targets["input_ids"]
         return model_inputs
 
     # Source: https://github.com/AldoF95/bart-chat-summarizer-finetuning/blob/main/Bart_large_xsum_fine_tuned_samsum.ipynb
     def _compute_rouge(self, pred):
         predictions, labels = pred
-        decode_predictions = self.tokenizer.batch_decode(predictions, skip_special_tokens=True)
+        decode_predictions = self.tokenizer.batch_decode(
+            predictions, skip_special_tokens=True
+        )
         decode_labels = self.tokenizer.batch_decode(labels, skip_special_tokens=True)
 
         # compute results
-        res = self.metric.compute(predictions=decode_predictions, references=decode_labels, use_stemmer=True)
+        res = self.metric.compute(
+            predictions=decode_predictions, references=decode_labels, use_stemmer=True
+        )
         res = {key: value.mid.fmeasure * 100 for key, value in res.items()}
 
-        pred_lens = [np.count_nonzero(pred != self.tokenizer.pad_token_id) for pred in predictions]
-        res['gen_len'] = np.mean(pred_lens)
+        pred_lens = [
+            np.count_nonzero(pred != self.tokenizer.pad_token_id)
+            for pred in predictions
+        ]
+        res["gen_len"] = np.mean(pred_lens)
         return {k: round(v, 4) for k, v in res.items()}
 
     def train(self):
         # Load datasets
         train_dataset, val_dataset, test_dataset = self.load_datasets()
         # Tokenize datasets
-        tokenized_train_dataset, tokenized_val_dataset, _ = self.tokenize_datasets(train_dataset, val_dataset, test_dataset)
+        tokenized_train_dataset, tokenized_val_dataset, _ = self.tokenize_datasets(
+            train_dataset, val_dataset, test_dataset
+        )
         # Initialize model and training arguments
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model = AutoModelForSeq2SeqLM.from_pretrained(self.base_checkpoint)
         model = model.to(device)
 
         collator = DataCollatorForSeq2Seq(self.tokenizer, model=model)
         args = Seq2SeqTrainingArguments(
-            'fairytale-qg-test',
-            evaluation_strategy='epoch',
-            save_strategy='epoch',
+            "fairytale-qg-test",
+            evaluation_strategy="epoch",
+            save_strategy="epoch",
             learning_rate=2e-5,
             per_device_train_batch_size=2,
             per_device_eval_batch_size=2,
@@ -146,7 +163,7 @@ class QGFineTune:
             eval_dataset=tokenized_val_dataset,
             data_collator=collator,
             tokenizer=self.tokenizer,
-            compute_metrics=self._compute_rouge
+            compute_metrics=self._compute_rouge,
         )
         # Train the model
         trainer.train()
