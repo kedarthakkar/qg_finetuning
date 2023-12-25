@@ -39,9 +39,11 @@ class QGFineTune:
         else:
             self.tokenizer = tokenizer
 
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     # TODO: Add function type annotation
     def load_datasets(self):
-        train_dataset = load_dataset("GEM/FairytaleQA", split="train")
+        train_dataset = load_dataset("GEM/FairytaleQA", split="model")
         val_dataset = load_dataset("GEM/FairytaleQA", split="validation")
         test_dataset = load_dataset("GEM/FairytaleQA", split="test")
 
@@ -85,6 +87,7 @@ class QGFineTune:
 
         return tokenized_datasets[0], tokenized_datasets[1], tokenized_datasets[2]
 
+    # TODO: Update tokenize function to only tokenize targets if they exist
     def _tokenize_function(self, examples):
         model_inputs = self.tokenizer(
             examples["content"],
@@ -134,9 +137,8 @@ class QGFineTune:
             train_dataset, val_dataset, test_dataset
         )
         # Initialize model and training arguments
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model = AutoModelForSeq2SeqLM.from_pretrained(self.base_checkpoint)
-        model = model.to(device)
+        model = model.to(self.device)
 
         collator = DataCollatorForSeq2Seq(self.tokenizer, model=model)
         args = Seq2SeqTrainingArguments(
@@ -169,3 +171,35 @@ class QGFineTune:
         trainer.train()
         # Save the model
         trainer.save_model(self.model_filepath)
+
+    def infer(self, dataset):
+        if self.model_filepath is None:
+            raise ValueError("Model must be trained before running inference!")
+
+        model = AutoModelForSeq2SeqLM.from_pretrained(self.model_filepath)
+        tokenized_dataset = dataset.map(
+            self._tokenize_function,
+            batched=True,
+            remove_columns=[
+                "story_name",
+                "content",
+                "answer",
+                "question",
+                "gem_id",
+                "target",
+                "references",
+                "local_or_sum",
+                "attribute",
+                "ex_or_im",
+            ],
+        )
+        tokenized_out = model.generate(
+            tokenized_dataset["input_ids"].to(self.device),
+            num_beams=2,
+            min_length=0,
+            max_length=50,
+        )
+        decoded_out = self.tokenizer.batch_decode(
+            tokenized_out, skip_special_tokens=True
+        )
+        return decoded_out
