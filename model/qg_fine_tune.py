@@ -43,7 +43,7 @@ class QGFineTune:
 
     # TODO: Add function type annotation
     def load_datasets(self):
-        train_dataset = load_dataset("GEM/FairytaleQA", split="model")
+        train_dataset = load_dataset("GEM/FairytaleQA", split="train")
         val_dataset = load_dataset("GEM/FairytaleQA", split="validation")
         test_dataset = load_dataset("GEM/FairytaleQA", split="test")
 
@@ -87,7 +87,6 @@ class QGFineTune:
 
         return tokenized_datasets[0], tokenized_datasets[1], tokenized_datasets[2]
 
-    # TODO: Update tokenize function to only tokenize targets if they exist
     def _tokenize_function(self, examples):
         model_inputs = self.tokenizer(
             examples["content"],
@@ -96,16 +95,18 @@ class QGFineTune:
             truncation=True,
             return_tensors="pt",
         )
-        with self.tokenizer.as_target_tokenizer():
-            targets = self.tokenizer(
-                examples["target"],
-                max_length=self.max_target_length,
-                padding="max_length",
-                truncation=True,
-                return_tensors="pt",
-            )
+        # Tokenize targets if they exist
+        if 'target' in examples:
+            with self.tokenizer.as_target_tokenizer():
+                targets = self.tokenizer(
+                    examples["target"],
+                    max_length=self.max_target_length,
+                    padding="max_length",
+                    truncation=True,
+                    return_tensors="pt",
+                )
 
-        model_inputs["labels"] = targets["input_ids"]
+            model_inputs["labels"] = targets["input_ids"]
         return model_inputs
 
     # Source: https://github.com/AldoF95/bart-chat-summarizer-finetuning/blob/main/Bart_large_xsum_fine_tuned_samsum.ipynb
@@ -172,7 +173,7 @@ class QGFineTune:
         # Save the model
         trainer.save_model(self.model_filepath)
 
-    def infer(self, dataset):
+    def infer_dataset(self, dataset):
         if self.model_filepath is None:
             raise ValueError("Model must be trained before running inference!")
 
@@ -195,6 +196,24 @@ class QGFineTune:
         )
         tokenized_out = model.generate(
             tokenized_dataset["input_ids"].to(self.device),
+            num_beams=2,
+            min_length=0,
+            max_length=50,
+        )
+        decoded_out = self.tokenizer.batch_decode(
+            tokenized_out, skip_special_tokens=True
+        )
+        return decoded_out
+
+    # TODO: Optimize by loading model only once
+    def infer(self, example):
+        if self.model_filepath is None:
+            raise ValueError("Model must be trained before running inference!")
+
+        model = AutoModelForSeq2SeqLM.from_pretrained(self.model_filepath)
+        tokenized_example = self._tokenize_function(example)
+        tokenized_out = model.generate(
+            tokenized_example["input_ids"].to(self.device),
             num_beams=2,
             min_length=0,
             max_length=50,
