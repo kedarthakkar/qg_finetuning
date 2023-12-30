@@ -137,6 +137,9 @@ class QGFineTune:
         tokenized_train_dataset, tokenized_val_dataset, _ = self.tokenize_datasets(
             train_dataset, val_dataset, test_dataset
         )
+        tokenized_train_dataset.set_format("torch")
+        tokenized_val_dataset.set_format("torch")
+
         # Initialize model and training arguments
         model = AutoModelForSeq2SeqLM.from_pretrained(self.base_checkpoint)
         model = model.to(self.device)
@@ -195,6 +198,7 @@ class QGFineTune:
                 "ex_or_im",
             ],
         )
+        tokenized_dataset.set_format("torch")
         tokenized_out = model.generate(
             tokenized_dataset["input_ids"].to(self.device),
             num_beams=2,
