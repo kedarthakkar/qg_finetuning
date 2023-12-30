@@ -3,3 +3,4 @@
 .DS_Store
 fairytale_qg/
 fairytale_qg.zip
+model/__pycache__/

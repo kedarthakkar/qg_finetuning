@@ -96,7 +96,7 @@ class QGFineTune:
             return_tensors="pt",
         )
         # Tokenize targets if they exist
-        if 'target' in examples:
+        if "target" in examples:
             with self.tokenizer.as_target_tokenizer():
                 targets = self.tokenizer(
                     examples["target"],
@@ -210,7 +210,7 @@ class QGFineTune:
         if self.model_filepath is None:
             raise ValueError("Model must be trained before running inference!")
 
-        example_wrapped = {'content': example}
+        example_wrapped = {"content": example}
         model = AutoModelForSeq2SeqLM.from_pretrained(self.model_filepath)
         tokenized_example = self._tokenize_function(example_wrapped)
         tokenized_out = model.generate(
