@@ -6,7 +6,7 @@ def main(model_filepath, example):
     qg_fine_tune = QGFineTune(
         model_filepath=model_filepath,
     )
-    qg_fine_tune.infer(example)
+    print(qg_fine_tune.infer(example))
 
 
 if __name__ == "__main__":
