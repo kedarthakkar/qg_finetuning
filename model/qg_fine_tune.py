@@ -214,6 +214,7 @@ class QGFineTune:
         example_wrapped = {"content": example}
         model = AutoModelForSeq2SeqLM.from_pretrained(self.model_filepath)
         model = model.to(self.device)
+        print(self.device)
         tokenized_example = self._tokenize_function(example_wrapped)
         tokenized_out = model.generate(
             tokenized_example["input_ids"].to(self.device),
