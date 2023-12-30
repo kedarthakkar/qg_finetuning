@@ -178,6 +178,7 @@ class QGFineTune:
             raise ValueError("Model must be trained before running inference!")
 
         model = AutoModelForSeq2SeqLM.from_pretrained(self.model_filepath)
+        model = model.to(self.device)
         tokenized_dataset = dataset.map(
             self._tokenize_function,
             batched=True,
@@ -212,6 +213,7 @@ class QGFineTune:
 
         example_wrapped = {"content": example}
         model = AutoModelForSeq2SeqLM.from_pretrained(self.model_filepath)
+        model = model.to(self.device)
         tokenized_example = self._tokenize_function(example_wrapped)
         tokenized_out = model.generate(
             tokenized_example["input_ids"].to(self.device),
