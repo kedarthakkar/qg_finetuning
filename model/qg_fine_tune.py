@@ -201,10 +201,15 @@ class QGFineTune:
             min_length=0,
             max_length=50,
         )
+        eval_scores = None
+        if "labels" in tokenized_dataset:
+            pred = (tokenized_out, tokenized_dataset["labels"])
+            eval_scores = self._compute_rouge(pred)
+
         decoded_out = self.tokenizer.batch_decode(
             tokenized_out, skip_special_tokens=True
         )
-        return decoded_out
+        return decoded_out, eval_scores
 
     # TODO: Optimize by loading model only once
     def infer(self, example):
@@ -214,7 +219,6 @@ class QGFineTune:
         example_wrapped = {"content": example}
         model = AutoModelForSeq2SeqLM.from_pretrained(self.model_filepath)
         model = model.to(self.device)
-        print(self.device)
         tokenized_example = self._tokenize_function(example_wrapped)
         tokenized_out = model.generate(
             tokenized_example["input_ids"].to(self.device),
