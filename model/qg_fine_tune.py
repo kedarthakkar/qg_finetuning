@@ -6,33 +6,35 @@ from transformers import Seq2SeqTrainingArguments
 from transformers import Seq2SeqTrainer
 import torch
 import numpy as np
-from typing import Optional
+from typing import Optional, List
 
 
-class QGFineTune:
+class Seq2SeqFineTune:
     # TODO: Type annotation for metric
     def __init__(
         self,
+        dataset_name: str,
+        train_sample_key: str = "content",
+        train_label_key: str = "target",
         base_checkpoint: str = "facebook/bart-large-cnn",
+        checkpoint_dir: str = 'checkpoint_dir',
         tokenizer=None,
         max_input_length: int = 1024,
         max_target_length: int = 128,
         model_filepath: str = "fairytale_qg",
-        metric_name="rouge",
+        metric_name: str ="rouge",
         seed: int = 334,
-        train_sample_size: Optional[int] = None,
-        val_sample_size: Optional[int] = None,
-        test_sample_size: Optional[int] = None,
     ):
+        self.dataset_name = dataset_name
+        self.train_sample_key = train_sample_key
+        self.train_label_key = train_label_key
         self.base_checkpoint = base_checkpoint
+        self.checkpoint_dir = checkpoint_dir
         self.max_input_length = max_input_length
         self.max_target_length = max_target_length
         self.model_filepath = model_filepath
         self.metric = load_metric(metric_name)
         self.seed = seed
-        self.train_sample_size = train_sample_size
-        self.val_sample_size = val_sample_size
-        self.test_sample_size = test_sample_size
 
         if tokenizer is None:
             self.tokenizer = AutoTokenizer.from_pretrained(self.base_checkpoint)
@@ -42,29 +44,18 @@ class QGFineTune:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # TODO: Add function type annotation
-    def load_datasets(self):
-        train_dataset = load_dataset("GEM/FairytaleQA", split="train")
-        val_dataset = load_dataset("GEM/FairytaleQA", split="validation")
-        test_dataset = load_dataset("GEM/FairytaleQA", split="test")
+    def load_datasets(self, splits: List[str], sample_size: Optional[List[str]] = None):
+        if sample_size is not None:
+            if len(splits) != len(sample_size):
+                raise ValueError("Sample size list must be the same length as splits list if provided.")
 
-        if self.train_sample_size:
-            train_dataset = train_dataset.shuffle(seed=self.seed).select(
-                range(self.train_sample_size)
-            )
+        dataset_list = [load_dataset(self.dataset_name, split=curr_split) for curr_split in splits]
+        if sample_size is not None:
+            dataset_list = [dataset_list[i].shuffle(seed=self.seed).select(range(sample_size[i])) for i in range(len(dataset_list))]
 
-        if self.val_sample_size:
-            val_dataset = val_dataset.shuffle(seed=self.seed).select(
-                range(self.val_sample_size)
-            )
+        return dataset_list
 
-        if self.test_sample_size:
-            test_dataset = test_dataset.shuffle(seed=self.seed).select(
-                range(self.test_sample_size)
-            )
-
-        return train_dataset, val_dataset, test_dataset
-
-    def tokenize_datasets(self, train_dataset, val_dataset, test_dataset):
+    def tokenize_datasets(self, dataset_list):
         tokenized_datasets = [
             dataset.map(
                 self._tokenize_function,
@@ -82,24 +73,24 @@ class QGFineTune:
                     "ex_or_im",
                 ],
             )
-            for dataset in [train_dataset, val_dataset, test_dataset]
+            for dataset in dataset_list
         ]
 
-        return tokenized_datasets[0], tokenized_datasets[1], tokenized_datasets[2]
+        return tokenized_datasets
 
     def _tokenize_function(self, examples):
         model_inputs = self.tokenizer(
-            examples["content"],
+            examples[self.train_sample_key],
             max_length=self.max_input_length,
             padding="max_length",
             truncation=True,
             return_tensors="pt",
         )
         # Tokenize targets if they exist
-        if "target" in examples:
+        if self.train_label_key in examples:
             with self.tokenizer.as_target_tokenizer():
                 targets = self.tokenizer(
-                    examples["target"],
+                    examples[self.train_label_key],
                     max_length=self.max_target_length,
                     padding="max_length",
                     truncation=True,
@@ -132,11 +123,9 @@ class QGFineTune:
 
     def train(self):
         # Load datasets
-        train_dataset, val_dataset, test_dataset = self.load_datasets()
+        dataset_list = self.load_datasets(splits=['train', 'validation'])
         # Tokenize datasets
-        tokenized_train_dataset, tokenized_val_dataset, _ = self.tokenize_datasets(
-            train_dataset, val_dataset, test_dataset
-        )
+        tokenized_train_dataset, tokenized_val_dataset = self.tokenize_datasets(dataset_list)
         tokenized_train_dataset.set_format("torch")
         tokenized_val_dataset.set_format("torch")
 
@@ -146,7 +135,7 @@ class QGFineTune:
 
         collator = DataCollatorForSeq2Seq(self.tokenizer, model=model)
         args = Seq2SeqTrainingArguments(
-            "fairytale-qg-test",
+            self.checkpoint_dir,
             evaluation_strategy="epoch",
             save_strategy="epoch",
             learning_rate=2e-5,
@@ -229,7 +218,7 @@ class QGFineTune:
         if self.model_filepath is None:
             raise ValueError("Model must be trained before running inference!")
 
-        example_wrapped = {"content": example}
+        example_wrapped = {self.train_sample_key: example}
         model = AutoModelForSeq2SeqLM.from_pretrained(self.model_filepath)
         model = model.to(self.device)
         tokenized_example = self._tokenize_function(example_wrapped)
