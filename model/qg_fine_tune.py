@@ -17,12 +17,12 @@ class Seq2SeqFineTune:
         train_sample_key: str = "content",
         train_label_key: str = "target",
         base_checkpoint: str = "facebook/bart-large-cnn",
-        checkpoint_dir: str = 'checkpoint_dir',
+        checkpoint_dir: str = "checkpoint_dir",
         tokenizer=None,
         max_input_length: int = 1024,
         max_target_length: int = 128,
         model_filepath: str = "fairytale_qg",
-        metric_name: str ="rouge",
+        metric_name: str = "rouge",
         seed: int = 334,
     ):
         self.dataset_name = dataset_name
@@ -47,11 +47,18 @@ class Seq2SeqFineTune:
     def load_datasets(self, splits: List[str], sample_size: Optional[List[str]] = None):
         if sample_size is not None:
             if len(splits) != len(sample_size):
-                raise ValueError("Sample size list must be the same length as splits list if provided.")
+                raise ValueError(
+                    "Sample size list must be the same length as splits list if provided."
+                )
 
-        dataset_list = [load_dataset(self.dataset_name, split=curr_split) for curr_split in splits]
+        dataset_list = [
+            load_dataset(self.dataset_name, split=curr_split) for curr_split in splits
+        ]
         if sample_size is not None:
-            dataset_list = [dataset_list[i].shuffle(seed=self.seed).select(range(sample_size[i])) for i in range(len(dataset_list))]
+            dataset_list = [
+                dataset_list[i].shuffle(seed=self.seed).select(range(sample_size[i]))
+                for i in range(len(dataset_list))
+            ]
 
         return dataset_list
 
@@ -123,9 +130,11 @@ class Seq2SeqFineTune:
 
     def train(self):
         # Load datasets
-        dataset_list = self.load_datasets(splits=['train', 'validation'])
+        dataset_list = self.load_datasets(splits=["train", "validation"])
         # Tokenize datasets
-        tokenized_train_dataset, tokenized_val_dataset = self.tokenize_datasets(dataset_list)
+        tokenized_train_dataset, tokenized_val_dataset = self.tokenize_datasets(
+            dataset_list
+        )
         tokenized_train_dataset.set_format("torch")
         tokenized_val_dataset.set_format("torch")
 
@@ -205,7 +214,9 @@ class Seq2SeqFineTune:
                 decoded_labels = self.tokenizer.batch_decode(
                     tokenized_dataset["labels"][i:endpoint], skip_special_tokens=True
                 )
-                self.metric.add_batch(predictions=decoded_out, references=decoded_labels)
+                self.metric.add_batch(
+                    predictions=decoded_out, references=decoded_labels
+                )
 
         eval_scores = None
         if "labels" in tokenized_dataset.features:

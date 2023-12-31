@@ -4,7 +4,7 @@ import argparse
 
 def main(model_filepath, example):
     qg_fine_tune = QGFineTune(
-        dataset_name='GEM/FairytaleQA',
+        dataset_name="GEM/FairytaleQA",
         model_filepath=model_filepath,
     )
     print(qg_fine_tune.infer(example))

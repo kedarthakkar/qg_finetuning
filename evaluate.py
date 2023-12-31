@@ -4,10 +4,10 @@ import argparse
 
 def main(model_filepath):
     qg_fine_tune = QGFineTune(
-        dataset_name='GEM/FairytaleQA',
+        dataset_name="GEM/FairytaleQA",
         model_filepath=model_filepath,
     )
-    test_dataset = qg_fine_tune.load_datasets(splits=['test'])[0]
+    test_dataset = qg_fine_tune.load_datasets(splits=["test"])[0]
     decoded_out_list, eval_scores = qg_fine_tune.batch_infer(test_dataset, batch_size=4)
     print(len(decoded_out_list))
     print(eval_scores)
