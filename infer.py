@@ -1,9 +1,10 @@
-from model.qg_fine_tune import QGFineTune
+from model.qg_fine_tune import Seq2SeqFineTune
 import argparse
 
 
 def main(model_filepath, example):
-    qg_fine_tune = QGFineTune(
+    qg_fine_tune = Seq2SeqFineTune(
+        dataset_name="GEM/FairytaleQA",
         model_filepath=model_filepath,
     )
     print(qg_fine_tune.infer(example))

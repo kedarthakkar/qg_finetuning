@@ -1,13 +1,15 @@
-from model.qg_fine_tune import QGFineTune
+from model.qg_fine_tune import Seq2SeqFineTune
 import argparse
 
 
 def main(model_filepath):
-    qg_fine_tune = QGFineTune(
+    qg_fine_tune = Seq2SeqFineTune(
+        dataset_name="GEM/FairytaleQA",
         model_filepath=model_filepath,
     )
-    _, _, test_dataset = qg_fine_tune.load_datasets()
-    _, eval_scores = qg_fine_tune.batch_infer(test_dataset, batch_size=4)
+    test_dataset = qg_fine_tune.load_datasets(splits=["test"])[0]
+    decoded_out_list, eval_scores = qg_fine_tune.batch_infer(test_dataset, batch_size=4)
+    print(len(decoded_out_list))
     print(eval_scores)
 
 
