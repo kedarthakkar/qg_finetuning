@@ -176,7 +176,7 @@ class QGFineTune:
         # Save the model
         trainer.save_model(self.model_filepath)
 
-    def infer_dataset(self, dataset, batch_size):
+    def batch_infer(self, dataset, batch_size):
         if self.model_filepath is None:
             raise ValueError("Model must be trained before running inference!")
 

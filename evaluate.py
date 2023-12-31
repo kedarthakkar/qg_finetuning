@@ -7,7 +7,7 @@ def main(model_filepath):
         model_filepath=model_filepath,
     )
     _, _, test_dataset = qg_fine_tune.load_datasets()
-    _, eval_scores = qg_fine_tune.infer_dataset(test_dataset)
+    _, eval_scores = qg_fine_tune.batch_infer(test_dataset, batch_size=4)
     print(eval_scores)
 
 
