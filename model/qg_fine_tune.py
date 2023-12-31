@@ -18,7 +18,7 @@ class QGFineTune:
         max_input_length: int = 1024,
         max_target_length: int = 128,
         model_filepath: str = "fairytale_qg",
-        metric=load_metric("rouge"),
+        metric_name="rouge",
         seed: int = 334,
         train_sample_size: Optional[int] = None,
         val_sample_size: Optional[int] = None,
@@ -28,7 +28,7 @@ class QGFineTune:
         self.max_input_length = max_input_length
         self.max_target_length = max_target_length
         self.model_filepath = model_filepath
-        self.metric = metric
+        self.metric = load_metric(metric_name)
         self.seed = seed
         self.train_sample_size = train_sample_size
         self.val_sample_size = val_sample_size
@@ -176,7 +176,7 @@ class QGFineTune:
         # Save the model
         trainer.save_model(self.model_filepath)
 
-    def infer_dataset(self, dataset):
+    def infer_dataset(self, dataset, batch_size):
         if self.model_filepath is None:
             raise ValueError("Model must be trained before running inference!")
 
@@ -199,21 +199,30 @@ class QGFineTune:
             ],
         )
         tokenized_dataset.set_format("torch")
-        tokenized_out = model.generate(
-            tokenized_dataset["input_ids"].to(self.device),
-            num_beams=2,
-            min_length=0,
-            max_length=50,
-        )
-        eval_scores = None
-        if "labels" in tokenized_dataset:
-            pred = (tokenized_out, tokenized_dataset["labels"])
-            eval_scores = self._compute_rouge(pred)
+        decoded_out_list = []
+        for i in np.arange(0, len(tokenized_dataset), batch_size):
+            endpoint = min(i + batch_size, len(tokenized_dataset))
+            tokenized_out = model.generate(
+                tokenized_dataset["input_ids"][i:endpoint].to(self.device),
+                num_beams=2,
+                min_length=0,
+                max_length=50,
+            )
+            decoded_out = self.tokenizer.batch_decode(
+                tokenized_out, skip_special_tokens=True
+            )
+            decoded_out_list.extend(decoded_out)
+            if "labels" in tokenized_dataset.features:
+                decoded_labels = self.tokenizer.batch_decode(
+                    tokenized_dataset["labels"][i:endpoint], skip_special_tokens=True
+                )
+                self.metric.add_batch(predictions=decoded_out, references=decoded_labels)
 
-        decoded_out = self.tokenizer.batch_decode(
-            tokenized_out, skip_special_tokens=True
-        )
-        return decoded_out, eval_scores
+        eval_scores = None
+        if "labels" in tokenized_dataset.features:
+            eval_scores = self.metric.compute()
+
+        return decoded_out_list, eval_scores
 
     # TODO: Optimize by loading model only once
     def infer(self, example):
